@@ -153,6 +153,12 @@ class Raycaster(object):
             self.screen.set_at((halfWidth-1, i), pygame.Color('black'))
 
 
+def displayMessage(message, color, position, size):
+    font2 = pygame.font.SysFont("Arial", size)
+    texto = font2.render(message, 1, color)
+    screen.blit(texto, position)
+
+
 width = 1000
 height = 500
 
@@ -174,8 +180,39 @@ def updateFPS():
     return fps
 
 
+introMenu = True
 isRunning = True
 
+# Menu introduccion
+while introMenu:
+    for ev in pygame.event.get():
+        if ev.type == pygame.QUIT:
+            isRunning = False
+            introMenu = False
+        elif ev.type == pygame.KEYDOWN:
+            if ev.key == pygame.K_ESCAPE:
+                isRunning = False
+                introMenu = False
+            elif ev.key == pygame.K_RETURN:
+                introMenu = False
+
+    screen.fill(pygame.Color("gray"))
+
+    displayMessage("DOOM Chafa", pygame.Color(
+        'black'), (330, 100), 72)
+    displayMessage("Bienvenido a la recrecion del primer DOOM", pygame.Color(
+        'black'), (250, 250), 32)
+    displayMessage("Presiona la tecla ENTER para iniciar", pygame.Color(
+        'black'), (340, 300), 25)
+
+    screen.fill(pygame.Color("black"), (0, 0, 30, 30))
+    screen.blit(updateFPS(), (0, 0))
+    clock.tick(20)
+
+    pygame.display.flip()
+
+
+# Juego
 
 while isRunning:
 
