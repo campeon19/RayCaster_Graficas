@@ -36,8 +36,8 @@ class Raycaster(object):
         self.turnSize = 5
 
         self.player = {
-            'x': 100,
-            'y': 175,
+            'x': 80,
+            'y': 100,
             'fov': 60,
             'angle': 0}
 
@@ -168,7 +168,7 @@ screen = pygame.display.set_mode(
 screen.set_alpha(None)
 
 rCaster = Raycaster(screen)
-rCaster.load_map("map1.txt")
+rCaster.load_map("map2.txt")
 
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Arial", 25)
