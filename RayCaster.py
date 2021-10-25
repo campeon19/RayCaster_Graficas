@@ -1,4 +1,5 @@
 import pygame
+import pygame.gfxdraw
 
 from math import cos, sin, pi
 
@@ -153,6 +154,61 @@ class Raycaster(object):
             self.screen.set_at((halfWidth-1, i), pygame.Color('black'))
 
 
+buttons = pygame.sprite.Group()
+
+
+class Button(pygame.sprite.Sprite):
+    def __init__(self, position, text, size, colorB=pygame.Color('white'), colorT=pygame.Color('black'), hoverColor=pygame.Color('red'), borderc=(255, 255, 255), command=lambda: print("No command activated for this button")):
+        super().__init__()
+        self.text = text
+        self.colorB = colorB
+        self.colorT = colorT
+        self.colorOrig = colorB
+        self.hoverColor = hoverColor
+        self.borderc = borderc
+        self.font = pygame.font.SysFont("Arial", size)
+        self.render()
+        self.x, self.y, self.w, self.h = self.text_render.get_rect()
+        self.x, self.y = position
+        self.rect = pygame.Rect(self.x, self.y, self.w, self.h)
+        self.position = position
+        buttons.add(self)
+        self.pressed = 1
+        self.command = command
+
+    def render(self):
+        self.text_render = self.font.render(self.text, 1, self.colorT)
+        self.image = self.text_render
+
+    def update(self):
+        self.draw_button()
+        self.hover()
+        self.click()
+
+    def draw_button(self):
+        pygame.draw.rect(screen, self.colorB,
+                         (self.x, self.y, self.w, self.h))
+        pygame.gfxdraw.rectangle(
+            screen, (self.x, self.y, self.w, self.h), self.borderc)
+
+    def hover(self):
+        if self.rect.collidepoint(pygame.mouse.get_pos()):
+            self.colorB = self.hoverColor
+        else:
+            self.colorB = self.colorOrig
+
+        self.render()
+
+    def click(self):
+        if self.rect.collidepoint(pygame.mouse.get_pos()):
+            if pygame.mouse.get_pressed()[0] and self.pressed == 1:
+                print("Execunting code for button")
+                self.command()
+                self.pressed = 0
+            if pygame.mouse.get_pressed() == (0, 0, 0):
+                self.pressed = 1
+
+
 def displayMessage(message, color, position, size):
     font2 = pygame.font.SysFont("Arial", size)
     texto = font2.render(message, 1, color)
@@ -182,8 +238,76 @@ def updateFPS():
 
 introMenu = True
 isRunning = True
+isPaused = False
+
+
+def start():
+    global introMenu
+    introMenu = False
+    return introMenu
+
+
+def end():
+    global introMenu
+    global isRunning
+    global isPaused
+    isRunning = False
+    introMenu = False
+    isPaused = False
+    return isRunning, introMenu
+
+
+def resume():
+    global isPaused
+    isPaused = False
+
+
+def pause():
+    global introMenu
+    global isRunning
+    global isPaused
+    buttons.empty()
+    b0 = Button((420, 150), 'Continue', 50,
+                hoverColor=pygame.Color('brown'), command=resume)
+    b1 = Button((470, 300), 'Quit', 50,
+                hoverColor=pygame.Color('brown'), command=end)
+    while isPaused:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                isRunning = False
+                introMenu = False
+                isPaused = False
+            elif ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_ESCAPE:
+                    isRunning = True
+                    isPaused = False
+                elif ev.key == pygame.K_RETURN:
+                    introMenu = False
+
+        screen.fill(pygame.Color("black"))
+
+        displayMessage("Game Paused", pygame.Color(
+            'white'), (300, 30), 72)
+
+        buttons.update()
+        buttons.draw(screen)
+
+        screen.fill(pygame.Color("black"), (0, 0, 30, 30))
+        screen.blit(updateFPS(), (0, 0))
+        clock.tick(60)
+
+        pygame.display.flip()
+        pygame.display.update()
+
 
 # Menu introduccion
+picture = pygame.image.load('./Assets/QuakeB.jpg').convert()
+picture = pygame.transform.scale(picture, (width, height))
+
+b0 = Button((450, 350), 'Start Game', 30,
+            hoverColor=pygame.Color('brown'), command=start)
+b1 = Button((490, 400), 'Quit', 30,
+            hoverColor=pygame.Color('brown'), command=end)
 while introMenu:
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
@@ -196,20 +320,24 @@ while introMenu:
             elif ev.key == pygame.K_RETURN:
                 introMenu = False
 
-    screen.fill(pygame.Color("gray"))
+    screen.blit(picture, [0, 0])
 
-    displayMessage("DOOM Chafa", pygame.Color(
-        'black'), (330, 100), 72)
-    displayMessage("Bienvenido a la recrecion del primer DOOM", pygame.Color(
-        'black'), (250, 250), 32)
+    displayMessage("Quake Pygame Version", pygame.Color(
+        'white'), (200, 100), 72)
+    displayMessage("Bienvenido a la recrecion del primer Quake", pygame.Color(
+        'white'), (250, 250), 32)
     displayMessage("Presiona la tecla ENTER para iniciar", pygame.Color(
-        'black'), (340, 300), 25)
+        'white'), (340, 300), 25)
+
+    buttons.update()
+    buttons.draw(screen)
 
     screen.fill(pygame.Color("black"), (0, 0, 30, 30))
     screen.blit(updateFPS(), (0, 0))
-    clock.tick(20)
+    clock.tick(60)
 
     pygame.display.flip()
+    pygame.display.update()
 
 
 # Juego
@@ -227,7 +355,8 @@ while isRunning:
             right = (rCaster.player['angle'] + 90) * pi / 180
 
             if ev.key == pygame.K_ESCAPE:
-                isRunning = False
+                isPaused = True
+                pause()
             elif ev.key == pygame.K_w:
                 newX += cos(forward) * rCaster.stepSize
                 newY += sin(forward) * rCaster.stepSize
