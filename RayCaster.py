@@ -1,9 +1,11 @@
 import pygame
 import pygame.gfxdraw
 
-from math import cos, sin, pi
+from math import cos, sin, pi, atan2
 
 RAY_AMOUNT = 100
+
+SPRITE_BACKGROUND = (152, 0, 136, 255)
 
 wallcolors = {
     '1': pygame.Color('red'),
@@ -21,6 +23,20 @@ wallTextures = {
     '5': pygame.image.load('wall5.png')
 }
 
+enemies = [{"x": 150,
+            "y": 225,
+            "sprite": pygame.image.load('Assets/sprite1.png')},
+
+           {"x": 350,
+            "y": 125,
+            "sprite": pygame.image.load('Assets/sprite2.png')},
+
+           {"x": 300,
+            "y": 400,
+            "sprite": pygame.image.load('Assets/sprite3.png')}
+
+           ]
+
 
 class Raycaster(object):
     def __init__(self, screen):
@@ -28,6 +44,8 @@ class Raycaster(object):
         _, _, self.width, self.height = screen.get_rect()
 
         self.map = []
+        self.zbuffer = [float('inf') for z in range(int(self.width / 2))]
+
         self.blocksize = 50
         self.wallheight = 50
 
@@ -54,10 +72,49 @@ class Raycaster(object):
         rect = rect.move((x, y))
         self.screen.blit(tex, rect)
 
-    def drawPlayerIcon(self, color):
+    def drawIcons(self):
         if self.player['x'] < self.width / 2:
             rect = (self.player['x'] - 2, self.player['y'] - 2, 5, 5)
-            self.screen.fill(color, rect)
+            self.screen.fill(pygame.Color('black'), rect)
+
+        for enemy in enemies:
+            rect = (enemy['x'] - 2, enemy['y'] - 2, 5, 5)
+            self.screen.fill(pygame.Color('red'), rect)
+
+    def drawSprite(self, obj, size):
+        # Pitagoras
+        spriteDist = ((self.player['x'] - obj['x']) **
+                      2 + (self.player['y'] - obj['y']) ** 2) ** 0.5
+
+        # Angulo
+        spriteAngle = atan2(obj['y'] - self.player['y'],
+                            obj['x'] - self.player['x']) * 180 / pi
+
+        # Tamaño del sprite
+        aspectRatio = obj['sprite'].get_width() / obj['sprite'].get_height()
+        spriteHeight = (self.height / spriteDist) * size
+        spriteWidth = spriteHeight * aspectRatio
+
+        # Buscar el punto inicial para dibujar el sprite
+        angleDif = (spriteAngle - self.player['angle']) % 360
+        angleDif = (angleDif - 360) if angleDif > 180 else angleDif
+        startX = angleDif * (self.width / 2) / self.player['fov']
+        startX += (self.width * 3/4) - (spriteWidth / 2)
+        startY = (self.height / 2) - (spriteHeight / 2)
+        startX = int(startX)
+        startY = int(startY)
+
+        for x in range(startX, startX + int(spriteWidth)):
+            if (self.width / 2 < x < self.width) and self.zbuffer[x - int(self.width / 2)] >= spriteDist:
+                for y in range(startY, startY + int(spriteHeight)):
+                    tx = int((x - startX) *
+                             obj['sprite'].get_width() / spriteWidth)
+                    ty = int((y - startY) *
+                             obj['sprite'].get_height() / spriteHeight)
+                    texColor = obj['sprite'].get_at((tx, ty))
+                    if texColor != SPRITE_BACKGROUND and texColor[3] > 128:
+                        self.screen.set_at((x, y), texColor)
+                        self.zbuffer[x - int(self.width / 2)] = spriteDist
 
     def castRay(self, angle):
         rads = angle * pi / 180
@@ -121,7 +178,7 @@ class Raycaster(object):
                         if self.map[j][i] != ' ':
                             self.drawBlock(x, y, self.map[j][i])
 
-        self.drawPlayerIcon(pygame.Color('black'))
+        self.drawIcons()
 
         for column in range(RAY_AMOUNT):
             angle = self.player['angle'] - (self.player['fov'] / 2) + \
@@ -129,6 +186,9 @@ class Raycaster(object):
             dist, id, tx = self.castRay(angle)
 
             rayWidth = int((1 / RAY_AMOUNT) * halfWidth)
+
+            for i in range(rayWidth):
+                self.zbuffer[column * rayWidth + i] = dist
 
             startX = halfWidth + int(((column / RAY_AMOUNT) * halfWidth))
 
@@ -146,6 +206,9 @@ class Raycaster(object):
             tx = int(tx * tex.get_width())
             self.screen.blit(tex, (startX, startY),
                              (tx, 0, rayWidth, tex.get_height()))
+
+        for enemy in enemies:
+            self.drawSprite(enemy, 50)
 
         # Columna divisora
         for i in range(self.height):
@@ -219,6 +282,8 @@ width = 1000
 height = 500
 
 pygame.init()
+pygame.mixer.init()
+
 screen = pygame.display.set_mode(
     (width, height), pygame.DOUBLEBUF | pygame.HWACCEL)
 screen.set_alpha(None)
@@ -244,6 +309,7 @@ isPaused = False
 def start():
     global introMenu
     introMenu = False
+    pygame.mixer.music.stop()
     return introMenu
 
 
@@ -300,6 +366,8 @@ def pause():
         pygame.display.update()
 
 
+music = pygame.mixer.music.load("Sounds/track02.ogg")
+
 # Menu introduccion
 picture = pygame.image.load('./Assets/QuakeB.jpg').convert()
 picture = pygame.transform.scale(picture, (width, height))
@@ -308,6 +376,8 @@ b0 = Button((450, 350), 'Start Game', 30,
             hoverColor=pygame.Color('brown'), command=start)
 b1 = Button((490, 400), 'Quit', 30,
             hoverColor=pygame.Color('brown'), command=end)
+
+pygame.mixer.music.play(-1)
 while introMenu:
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
@@ -343,6 +413,8 @@ while introMenu:
 # Juego
 
 while isRunning:
+
+    #keys = pygame.key.get_pressed()
 
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
