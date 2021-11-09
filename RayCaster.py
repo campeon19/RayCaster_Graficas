@@ -1,6 +1,12 @@
+# Christian Daniel Pérez De León
+# Carne: 19710
+# Graficas por Computador
+
 import pygame
 import pygame.gfxdraw
 import numpy as np
+# Se importo numba para optimizar el codigo. La unica vez que se utiliza es en la linea 436 (@njit()).
+# Si no se desea instalar la libreria, se puede comentar la linea 436 y el import de numba.
 from numba import njit
 
 from math import cos, sin, pi, atan2
@@ -9,13 +15,6 @@ RAY_AMOUNT = 100
 
 SPRITE_BACKGROUND = (152, 0, 136, 255)
 
-wallcolors = {
-    '1': pygame.Color('red'),
-    '2': pygame.Color('green'),
-    '3': pygame.Color('blue'),
-    '4': pygame.Color('yellow'),
-    '5': pygame.Color('purple')
-}
 
 wallTextures = {
     '1': pygame.image.load('wall1.png'),
@@ -25,17 +24,21 @@ wallTextures = {
     '5': pygame.image.load('wall5.png')
 }
 
-enemies = [{"x": 150,
-            "y": 225,
+enemies = [{"x": 65,
+            "y": 215,
             "sprite": pygame.image.load('Assets/sprite1.png')},
 
            {"x": 350,
             "y": 125,
             "sprite": pygame.image.load('Assets/sprite7.png')},
 
-           {"x": 300,
-            "y": 400,
-            "sprite": pygame.image.load('Assets/sprite3.png')}
+           {"x": 80,
+            "y": 435,
+            "sprite": pygame.image.load('Assets/sprite3.png')},
+
+           {"x": 200,
+            "y": 320,
+            "sprite": pygame.image.load('Assets/sprite5.png')}
 
            ]
 
@@ -310,6 +313,7 @@ def start():
     global introMenu
     introMenu = False
     pygame.mixer.music.stop()
+    pygame.mixer.music.unload()
     return introMenu
 
 
@@ -326,6 +330,7 @@ def end():
 def resume():
     global isPaused
     isPaused = False
+    pygame.mixer.music.set_volume(0.5)
 
 
 def pause():
@@ -337,6 +342,7 @@ def pause():
                 hoverColor=pygame.Color('green'), command=resume)
     b1 = Button((210, 300), 'Quit', 50,
                 hoverColor=pygame.Color('red'), command=end)
+    pygame.mixer.music.set_volume(0.1)
     while isPaused:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -347,6 +353,7 @@ def pause():
                 if ev.key == pygame.K_ESCAPE:
                     isRunning = True
                     isPaused = False
+                    pygame.mixer.music.set_volume(0.5)
                 elif ev.key == pygame.K_RETURN:
                     introMenu = False
 
@@ -379,6 +386,7 @@ b1 = Button((230, 400), 'Quit', 30,
             hoverColor=pygame.Color('brown'), command=end)
 
 pygame.mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.5)
 while introMenu:
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
@@ -390,6 +398,8 @@ while introMenu:
                 introMenu = False
             elif ev.key == pygame.K_RETURN:
                 introMenu = False
+                pygame.mixer.music.stop()
+                pygame.mixer.music.unload()
 
     screen.blit(picture, [0, 0])
 
@@ -410,7 +420,7 @@ while introMenu:
     pygame.display.flip()
     pygame.display.update()
 
-
+# Para aumentar los FPS, se puede disminuir la resolucion de las imagenes en hRes y halfVRes
 hRes = 60
 halfVRes = 50
 mod = hRes/rCaster.player['fov']
@@ -422,6 +432,7 @@ sky = pygame.surfarray.array3d(pygame.transform.scale(sky, (360, halfVRes*2)))
 floor = pygame.surfarray.array3d(pygame.image.load('./Assets/floor.jpg'))/255
 
 
+# Aqui se utilizo Numba.
 @njit()
 def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod):
     for i in range(hres):
@@ -441,9 +452,13 @@ def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod):
     return frame
 
 
+music = pygame.mixer.music.load("Sounds/track04.ogg")
+
 # Juego
 lastTime = 0
 
+pygame.mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.5)
 while isRunning:
 
     screen.fill(pygame.Color("gray"))

@@ -1,0 +1,15 @@
+Referencias
+
+Recursos utilizados para implementar piso y cielo
+1.https://www.youtube.com/watch?v=2Yj5mmKWukw&ab_channel=FinFET
+2.https://github.com/FinFetChannel/Floorcasting/blob/main/floorcasting.py
+
+Recuros utilizados para optimizacion
+1.https://numba.pydata.org/
+
+Recursos utilizados para realizar botones
+1.https://pythonprogramming.altervista.org/buttons-in-pygame/?doing_wp_cron=1636435304.4697520732879638671875
+
+Recuros para implementar y manipular musica en pygame
+1.https://www.pygame.org/docs/ref/music.html#pygame.mixer.music.load
+
