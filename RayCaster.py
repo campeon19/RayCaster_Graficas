@@ -1,5 +1,7 @@
 import pygame
 import pygame.gfxdraw
+import numpy as np
+from numba import njit
 
 from math import cos, sin, pi, atan2
 
@@ -29,7 +31,7 @@ enemies = [{"x": 150,
 
            {"x": 350,
             "y": 125,
-            "sprite": pygame.image.load('Assets/sprite2.png')},
+            "sprite": pygame.image.load('Assets/sprite7.png')},
 
            {"x": 300,
             "y": 400,
@@ -44,7 +46,7 @@ class Raycaster(object):
         _, _, self.width, self.height = screen.get_rect()
 
         self.map = []
-        self.zbuffer = [float('inf') for z in range(int(self.width / 2))]
+        self.zbuffer = [float('inf') for z in range(int(self.width))]
 
         self.blocksize = 50
         self.wallheight = 50
@@ -65,21 +67,40 @@ class Raycaster(object):
             for line in file.readlines():
                 self.map.append(list(line.rstrip()))
 
-    def drawBlock(self, x, y, id):
-        tex = wallTextures[id]
-        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize))
-        rect = tex.get_rect()
-        rect = rect.move((x, y))
-        self.screen.blit(tex, rect)
+    def drawMinimap(self):
+        minimapWidth = 100
+        minimapHeight = 100
 
-    def drawIcons(self):
-        if self.player['x'] < self.width / 2:
-            rect = (self.player['x'] - 2, self.player['y'] - 2, 5, 5)
-            self.screen.fill(pygame.Color('black'), rect)
+        minimapSurface = pygame.Surface((500, 500))
+        minimapSurface.fill(pygame.Color("gray"))
+
+        for x in range(0, 500, self.blocksize):
+            for y in range(0, 500, self.blocksize):
+
+                i = int(x/self.blocksize)
+                j = int(y/self.blocksize)
+
+                if j < len(self.map):
+                    if i < len(self.map[j]):
+                        if self.map[j][i] != ' ':
+                            tex = wallTextures[self.map[j][i]]
+                            tex = pygame.transform.scale(
+                                tex, (self.blocksize, self.blocksize))
+                            rect = tex.get_rect()
+                            rect = rect.move((x, y))
+                            minimapSurface.blit(tex, rect)
+
+        rect = (int(self.player['x'] - 4), int(self.player['y']) - 4, 10, 10)
+        minimapSurface.fill(pygame.Color('black'), rect)
 
         for enemy in enemies:
-            rect = (enemy['x'] - 2, enemy['y'] - 2, 5, 5)
-            self.screen.fill(pygame.Color('red'), rect)
+            rect = (enemy['x'] - 4, enemy['y'] - 4, 10, 10)
+            minimapSurface.fill(pygame.Color('red'), rect)
+
+        minimapSurface = pygame.transform.scale(
+            minimapSurface, (minimapWidth, minimapHeight))
+        self.screen.blit(minimapSurface, (self.width -
+                         minimapWidth, self.height - minimapHeight))
 
     def drawSprite(self, obj, size):
         # Pitagoras
@@ -98,14 +119,14 @@ class Raycaster(object):
         # Buscar el punto inicial para dibujar el sprite
         angleDif = (spriteAngle - self.player['angle']) % 360
         angleDif = (angleDif - 360) if angleDif > 180 else angleDif
-        startX = angleDif * (self.width / 2) / self.player['fov']
-        startX += (self.width * 3/4) - (spriteWidth / 2)
+        startX = angleDif * self.width / self.player['fov']
+        startX += (self.width / 2) - (spriteWidth / 2)
         startY = (self.height / 2) - (spriteHeight / 2)
         startX = int(startX)
         startY = int(startY)
 
         for x in range(startX, startX + int(spriteWidth)):
-            if (self.width / 2 < x < self.width) and self.zbuffer[x - int(self.width / 2)] >= spriteDist:
+            if (0 < x < self.width) and self.zbuffer[x] >= spriteDist:
                 for y in range(startY, startY + int(spriteHeight)):
                     tx = int((x - startX) *
                              obj['sprite'].get_width() / spriteWidth)
@@ -114,7 +135,8 @@ class Raycaster(object):
                     texColor = obj['sprite'].get_at((tx, ty))
                     if texColor != SPRITE_BACKGROUND and texColor[3] > 128:
                         self.screen.set_at((x, y), texColor)
-                        self.zbuffer[x - int(self.width / 2)] = spriteDist
+                        if y == self.height / 2:
+                            self.zbuffer[x] = spriteDist
 
     def castRay(self, angle):
         rads = angle * pi / 180
@@ -159,46 +181,29 @@ class Raycaster(object):
 
                         tx = hit / self.blocksize
 
-                        pygame.draw.line(self.screen, pygame.Color(
-                            'white'), playerPos, (x, y))
+                        # pygame.draw.line(self.screen, pygame.Color(
+                        #    'white'), playerPos, (x, y))
                         return dist, self.map[j][i], tx
 
     def render(self):
-        halfWidth = int(self.width / 2)
         halfHeight = int(self.height / 2)
-
-        for x in range(0, halfWidth, self.blocksize):
-            for y in range(0, self.height, self.blocksize):
-
-                i = int(x/self.blocksize)
-                j = int(y/self.blocksize)
-
-                if j < len(self.map):
-                    if i < len(self.map[j]):
-                        if self.map[j][i] != ' ':
-                            self.drawBlock(x, y, self.map[j][i])
-
-        self.drawIcons()
 
         for column in range(RAY_AMOUNT):
             angle = self.player['angle'] - (self.player['fov'] / 2) + \
                 (self.player['fov'] * column / RAY_AMOUNT)
             dist, id, tx = self.castRay(angle)
 
-            rayWidth = int((1 / RAY_AMOUNT) * halfWidth)
+            rayWidth = int((1 / RAY_AMOUNT) * self.width)
 
             for i in range(rayWidth):
                 self.zbuffer[column * rayWidth + i] = dist
 
-            startX = halfWidth + int(((column / RAY_AMOUNT) * halfWidth))
+            startX = int(((column / RAY_AMOUNT) * self.width))
 
             h = self.height / \
                 (dist *
                  cos((angle - self.player["angle"]) * pi / 180)) * self.wallheight
             startY = int(halfHeight - h/2)
-            endY = int(halfHeight + h/2)
-
-            color_k = (1 - min(1, dist / self.maxdistance)) * 255
 
             tex = wallTextures[id]
             tex = pygame.transform.scale(
@@ -208,13 +213,9 @@ class Raycaster(object):
                              (tx, 0, rayWidth, tex.get_height()))
 
         for enemy in enemies:
-            self.drawSprite(enemy, 50)
+            self.drawSprite(enemy, 35)
 
-        # Columna divisora
-        for i in range(self.height):
-            self.screen.set_at((halfWidth, i), pygame.Color('black'))
-            self.screen.set_at((halfWidth+1, i), pygame.Color('black'))
-            self.screen.set_at((halfWidth-1, i), pygame.Color('black'))
+        self.drawMinimap()
 
 
 buttons = pygame.sprite.Group()
@@ -265,7 +266,6 @@ class Button(pygame.sprite.Sprite):
     def click(self):
         if self.rect.collidepoint(pygame.mouse.get_pos()):
             if pygame.mouse.get_pressed()[0] and self.pressed == 1:
-                print("Execunting code for button")
                 self.command()
                 self.pressed = 0
             if pygame.mouse.get_pressed() == (0, 0, 0):
@@ -278,7 +278,7 @@ def displayMessage(message, color, position, size):
     screen.blit(texto, position)
 
 
-width = 1000
+width = 500
 height = 500
 
 pygame.init()
@@ -333,10 +333,10 @@ def pause():
     global isRunning
     global isPaused
     buttons.empty()
-    b0 = Button((420, 150), 'Continue', 50,
-                hoverColor=pygame.Color('brown'), command=resume)
-    b1 = Button((470, 300), 'Quit', 50,
-                hoverColor=pygame.Color('brown'), command=end)
+    b0 = Button((165, 200), 'Continue', 50,
+                hoverColor=pygame.Color('green'), command=resume)
+    b1 = Button((210, 300), 'Quit', 50,
+                hoverColor=pygame.Color('red'), command=end)
     while isPaused:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -353,7 +353,7 @@ def pause():
         screen.fill(pygame.Color("black"))
 
         displayMessage("Game Paused", pygame.Color(
-            'white'), (300, 30), 72)
+            'white'), (55, 30), 72)
 
         buttons.update()
         buttons.draw(screen)
@@ -372,9 +372,10 @@ music = pygame.mixer.music.load("Sounds/track02.ogg")
 picture = pygame.image.load('./Assets/QuakeB.jpg').convert()
 picture = pygame.transform.scale(picture, (width, height))
 
-b0 = Button((450, 350), 'Start Game', 30,
+
+b0 = Button((190, 350), 'Start Game', 30,
             hoverColor=pygame.Color('brown'), command=start)
-b1 = Button((490, 400), 'Quit', 30,
+b1 = Button((230, 400), 'Quit', 30,
             hoverColor=pygame.Color('brown'), command=end)
 
 pygame.mixer.music.play(-1)
@@ -393,11 +394,11 @@ while introMenu:
     screen.blit(picture, [0, 0])
 
     displayMessage("Quake Pygame Version", pygame.Color(
-        'white'), (200, 100), 72)
+        'white'), (15, 100), 54)
     displayMessage("Bienvenido a la recrecion del primer Quake", pygame.Color(
-        'white'), (250, 250), 32)
-    displayMessage("Presiona la tecla ENTER para iniciar", pygame.Color(
-        'white'), (340, 300), 25)
+        'white'), (30, 250), 28)
+    displayMessage("Presiona la tecla ENTER para iniciar o", pygame.Color(
+        'white'), (70, 300), 25)
 
     buttons.update()
     buttons.draw(screen)
@@ -410,66 +411,109 @@ while introMenu:
     pygame.display.update()
 
 
+hRes = 60
+halfVRes = 50
+mod = hRes/rCaster.player['fov']
+posx, posy, rot = rCaster.player['x'], rCaster.player['y'], rCaster.player['angle']
+
+frame = np.random.uniform(0, 1, (hRes, halfVRes*2, 3))
+sky = pygame.image.load('./Assets/skybox.jpg')
+sky = pygame.surfarray.array3d(pygame.transform.scale(sky, (360, halfVRes*2)))
+floor = pygame.surfarray.array3d(pygame.image.load('./Assets/floor.jpg'))/255
+
+
+@njit()
+def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod):
+    for i in range(hres):
+        rot_i = rot + np.deg2rad(i/mod - 30)
+        sin, cos, cos2 = np.sin(rot_i), np.cos(
+            rot_i), np.cos(np.deg2rad(i/mod - 30))
+        frame[i][:] = sky[int(np.rad2deg(rot_i) % 360)][:]/255
+        for j in range(halfvres):
+            n = (halfvres/(halfvres-j))/cos2
+            x, y = posx + cos*n, posy + sin*n
+            xx, yy = int(x*2 % 1*99), int(y*2 % 1*99)
+
+            shade = 0.2 + 0.8*(1-j/halfvres)
+
+            frame[i][halfvres*2-j-1] = shade*floor[xx][yy]
+
+    return frame
+
+
 # Juego
+lastTime = 0
 
 while isRunning:
 
-    #keys = pygame.key.get_pressed()
+    screen.fill(pygame.Color("gray"))
+    keys = pygame.key.get_pressed()
 
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
             isRunning = False
 
         elif ev.type == pygame.KEYDOWN:
-            newX = rCaster.player['x']
-            newY = rCaster.player['y']
-            forward = rCaster.player['angle'] * pi / 180
-            right = (rCaster.player['angle'] + 90) * pi / 180
-
             if ev.key == pygame.K_ESCAPE:
                 isPaused = True
                 pause()
-            elif ev.key == pygame.K_w:
-                newX += cos(forward) * rCaster.stepSize
-                newY += sin(forward) * rCaster.stepSize
-            elif ev.key == pygame.K_s:
-                newX -= cos(forward) * rCaster.stepSize
-                newY -= sin(forward) * rCaster.stepSize
-            elif ev.key == pygame.K_a:
-                newX -= cos(right) * rCaster.stepSize
-                newY -= sin(right) * rCaster.stepSize
-            elif ev.key == pygame.K_d:
-                newX += cos(right) * rCaster.stepSize
-                newY += sin(right) * rCaster.stepSize
-            elif ev.key == pygame.K_q:
-                rCaster.player['angle'] -= rCaster.turnSize
-            elif ev.key == pygame.K_e:
-                rCaster.player['angle'] += rCaster.turnSize
 
-            i = int(newX/rCaster.blocksize)
-            j = int(newY/rCaster.blocksize)
+    t = pygame.time.get_ticks()
+    deltaTime = (t - lastTime) / 1000
+    lastTime = t
 
-            if rCaster.map[j][i] == ' ':
-                rCaster.player['x'] = newX
-                rCaster.player['y'] = newY
+    newX = rCaster.player['x']
+    newY = rCaster.player['y']
+    forward = rCaster.player['angle'] * pi / 180
+    right = (rCaster.player['angle'] + 90) * pi / 180
 
-    screen.fill(pygame.Color("gray"))
+    if keys[pygame.K_w]:
+        newX += cos(forward) * rCaster.stepSize * deltaTime * 10
+        newY += sin(forward) * rCaster.stepSize * deltaTime * 10
+    elif keys[pygame.K_s]:
+        newX -= cos(forward) * rCaster.stepSize * deltaTime * 10
+        newY -= sin(forward) * rCaster.stepSize * deltaTime * 10
+    elif keys[pygame.K_a]:
+        newX -= cos(right) * rCaster.stepSize * deltaTime * 10
+        newY -= sin(right) * rCaster.stepSize * deltaTime * 10
+    elif keys[pygame.K_d]:
+        newX += cos(right) * rCaster.stepSize * deltaTime * 10
+        newY += sin(right) * rCaster.stepSize * deltaTime * 10
+    elif keys[pygame.K_q]:
+        rCaster.player['angle'] -= rCaster.turnSize * deltaTime * 10
+    elif keys[pygame.K_e]:
+        rCaster.player['angle'] += rCaster.turnSize * deltaTime * 10
 
-    # Techo
-    screen.fill(pygame.Color("saddlebrown"),
-                (int(width / 2), 0,  int(width / 2), int(height / 2)))
+    i = int(newX/rCaster.blocksize)
+    j = int(newY/rCaster.blocksize)
 
-    # Piso
-    screen.fill(pygame.Color("dimgray"), (int(width / 2),
-                int(height / 2),  int(width / 2), int(height / 2)))
+    if rCaster.map[j][i] == ' ':
+        rCaster.player['x'] = newX
+        rCaster.player['y'] = newY
+
+    frame = new_frame(rCaster.player['x'], rCaster.player['y'],
+                      rCaster.player['angle'], frame, sky, floor, hRes, halfVRes, mod)
+
+    surf = pygame.surfarray.make_surface(frame*255)
+    surf = pygame.transform.scale(surf, (width, height))
+
+    screen.blit(surf, (0, 0))
+
+    # # Techo
+    # screen.fill(pygame.Color("saddlebrown"), (0, 0,  width, int(height / 2)))
+
+    # # Piso
+    # screen.fill(pygame.Color("dimgray"),
+    #             (0, int(height / 2),  width, int(height / 2)))
 
     rCaster.render()
 
     # FPS
     screen.fill(pygame.Color("black"), (0, 0, 30, 30))
     screen.blit(updateFPS(), (0, 0))
-    clock.tick(120)
+    clock.tick(200)
 
     pygame.display.flip()
+
 
 pygame.quit()
