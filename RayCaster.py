@@ -420,7 +420,7 @@ while introMenu:
     pygame.display.flip()
     pygame.display.update()
 
-# Para aumentar los FPS, se puede disminuir la resolucion de las imagenes en hRes y halfVRes
+# Para aumentar los FPS, se puede disminuir la resolucion de las imagenes de fondo (piso y cielo) en hRes y halfVRes
 hRes = 60
 halfVRes = 50
 mod = hRes/rCaster.player['fov']
